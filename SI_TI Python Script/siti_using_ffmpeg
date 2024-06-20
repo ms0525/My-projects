@@ -1,0 +1,66 @@
+import os
+import subprocess
+import json
+
+def run_ffmpeg(video_path, log_path):
+    ffmpeg_path = 'path/ffmpeg'  # Change this to the path of ffmpeg executable if needed
+    command = [
+        ffmpeg_path,
+        '-i', video_path,
+        '-vf', 'siti=print_summary=1',
+        '-f', 'null', '-'
+    ]
+    with open(log_path, 'w') as log_file:
+        subprocess.run(command, stdout=log_file, stderr=subprocess.STDOUT)
+
+def extract_metrics_from_log(log_path):
+    avg_si = 0.0
+    avg_ti = 0.0
+    
+    with open(log_path, 'r') as f:
+        lines = f.readlines()
+    
+    lines_iter = iter(lines)
+    for line in lines_iter:
+        if "Spatial Information:" in line:
+            next_line = next(lines_iter)
+            avg_si = float(next_line.split(":")[1].strip())
+        elif "Temporal Information:" in line:
+            next_line = next(lines_iter)
+            avg_ti = float(next_line.split(":")[1].strip())
+    
+    return avg_si, avg_ti
+
+def process_video(video_path, log_folder):
+    video_filename = os.path.basename(video_path)
+    log_path = os.path.join(log_folder, f"{video_filename}_log.txt")
+
+    run_ffmpeg(video_path, log_path)
+    si, ti = extract_metrics_from_log(log_path)
+
+    return si, ti
+
+def process_videos_in_folder(folder_path, log_folder):
+    results = {}
+    for filename in os.listdir(folder_path):
+        if filename.endswith('.mp4'):  # Add other video file extensions if needed
+            video_path = os.path.join(folder_path, filename)
+            print(f"Processing video: {video_path}")
+            si, ti = process_video(video_path, log_folder)
+            results[filename] = {'SI': si, 'TI': ti}
+    return results
+
+def save_results_to_file(results, output_path):
+    with open(output_path, 'w') as f:
+        json.dump(results, f, indent=4)
+
+# Example usage
+folder_path = 'path/to/videos/folder'
+log_folder = 'path/to/log/folder'
+os.makedirs(log_folder, exist_ok=True)
+
+results = process_videos_in_folder(folder_path, log_folder)
+output_path = os.path.join(folder_path, 'si_ti_results.json')
+save_results_to_file(results, output_path)
+
+print(results)
